@@ -81,9 +81,10 @@ class Auth
     public static function homeFor(array $user): string
     {
         return match ($user['role_name'] ?? '') {
-            'Super Admin' => '../admin/index.php',
-            'Member'      => '../member/index.php',
-            default       => '../tenant/index.php',
+            'Super Admin' => '../super-admin/dashboard.php',
+            'Trainer'     => '../trainer/dashboard.php',
+            'Member'      => '../member/dashboard.php',
+            default       => '../admin/dashboard.php',
         };
     }
 

@@ -4,6 +4,15 @@ class Member extends BaseModel
 {
     protected static string $table = 'members';
 
+    /** Next human-friendly membership ID, e.g. FFP-M0042 (unique per gym). */
+    public static function nextMemberCode(int $tenantId): string
+    {
+        $max = (int) (Database::scalar(
+            'SELECT COALESCE(MAX(id),0) FROM members WHERE tenant_id = ?', [$tenantId]
+        ) ?? 0);
+        return 'FFP-M' . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
+
     public static function withMembership(int $tenantId, int $limit = 200, string $search = ''): array
     {
         $sql = 'SELECT m.*, b.name AS branch_name,

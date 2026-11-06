@@ -22,11 +22,12 @@ $nav = function (string $slug, string $file, string $icon, string $label) use ($
 <div class="dash">
   <aside class="sidebar" id="appSidebar">
     <div class="brand">
-      <a class="brand-mark" href="<?= e(url('member/index.php')) ?>"><span class="bm-icon"><i class="bi bi-lightning-charge-fill"></i></span>FitFlow<span class="text-orange">Pro</span></a>
+      <a class="brand-mark" href="<?= e(url('member/dashboard.php')) ?>"><span class="bm-icon"><i class="bi bi-lightning-charge-fill"></i></span>FitFlow<span class="text-orange">Pro</span></a>
       <div class="small mt-1" style="color:var(--ff-muted)"><?= e($member['name'] ?? ($user['name'] ?? 'Member')) ?> · <?= e($user['tenant_name'] ?? '') ?></div>
     </div>
     <nav>
       <div class="nav-head">My Training</div>
+      <?= $nav('dashboard', 'dashboard.php', 'bi-speedometer2', 'Dashboard') ?>
       <?= $nav('home', 'index.php', 'bi-house', 'My Overview') ?>
       <?= $nav('membership', 'membership.php', 'bi-card-checklist', 'My Membership') ?>
       <?= $nav('workouts', 'workouts.php', 'bi-activity', 'My Workouts') ?>

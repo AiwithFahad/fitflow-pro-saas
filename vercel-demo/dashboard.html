@@ -38,7 +38,7 @@
     <div class="p-3 mt-auto border-top" style="border-color:var(--ff-border)!important">
       <div class="d-flex align-items-center gap-2">
         <img src="https://randomuser.me/api/portraits/men/22.jpg" alt="Admin" class="rounded-circle" width="38" height="38">
-        <div class="small"><div class="fw-bold text-white">Sarah Mitchell</div><div style="color:var(--ff-muted)">Gym Admin · Iron Paradise</div></div>
+        <div class="small"><div class="fw-bold text-white" id="sideUserName">Sarah Mitchell</div><div style="color:var(--ff-muted)" id="sideUserRole">Gym Admin · Iron Paradise</div></div>
       </div>
     </div>
   </aside>
@@ -66,15 +66,26 @@
         </div>
       </div>
 
+      <!-- Role view switcher (demo of the three role dashboards) -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <span class="small" style="color:var(--ff-muted)">Viewing as:</span>
+        <div class="btn-group" role="group" aria-label="Role dashboards">
+          <button type="button" class="btn btn-ff btn-sm" data-role-view="admin">Gym Admin</button>
+          <button type="button" class="btn btn-ff-outline btn-sm" data-role-view="trainer">Trainer</button>
+          <button type="button" class="btn btn-ff-outline btn-sm" data-role-view="member">Member</button>
+        </div>
+        <span class="small" style="color:var(--ff-muted)">The full app serves a separate, permission-checked dashboard per role.</span>
+      </div>
+
       <!-- KPIs -->
-      <div class="row g-3 mb-4">
+      <div class="row g-3 mb-4" id="adminKpis">
         <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-people"></i></span><div class="k-label">Active members</div><div class="k-value">590</div><div class="small text-success">+38 this month</div></div></div>
         <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-person-badge"></i></span><div class="k-label">Trainers</div><div class="k-value">4</div><div class="small" style="color:var(--ff-muted)">of 25 plan limit</div></div></div>
         <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-calendar-check"></i></span><div class="k-label">Check-ins today</div><div class="k-value">148</div><div class="small text-success">Peak hour 6–7 AM</div></div></div>
         <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-cash-stack"></i></span><div class="k-label">Verified revenue (month)</div><div class="k-value">$3,836</div><div class="small" style="color:var(--ff-amber)">1 payment pending verification</div></div></div>
       </div>
 
-      <div class="row g-4">
+      <div class="row g-4" id="adminMain">
         <!-- Charts -->
         <div class="col-xl-8">
           <div class="panel mb-4"><h6 class="fw-bold mb-3">Attendance — last 14 days</h6><canvas id="attChart" class="chart"></canvas></div>
@@ -85,7 +96,11 @@
 
           <!-- Members -->
           <div class="panel mt-4" id="members">
-            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="fw-bold mb-0">Members</h6><span class="small" style="color:var(--ff-muted)">Search from the top bar</span></div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><h6 class="fw-bold mb-0">Members</h6>
+              <span class="d-flex align-items-center gap-2"><span class="small" style="color:var(--ff-muted)">Search from the top bar, or filter:</span>
+              <select id="memberStatusFilter" class="form-select form-select-sm" style="max-width:150px">
+                <option value="">All statuses</option><option value="Active">Active</option><option value="Expiring">Expiring</option><option value="Expired">Expired</option>
+              </select></span></div>
             <div class="table-responsive"><table class="table table-hover align-middle mb-0" id="membersTable">
               <thead><tr><th>Member</th><th>Plan</th><th>Trainer</th><th>BMI</th><th>Expires</th><th>Status</th></tr></thead>
               <tbody>
@@ -134,7 +149,7 @@
               <li class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--ff-border)!important"><span><strong>Frank Miller</strong> · Annual</span><span class="text-warning fw-bold">9 days</span></li>
               <li class="d-flex justify-content-between py-2"><span><strong>Daniel Brooks</strong> · Monthly</span><span style="color:var(--ff-muted)">24 days</span></li>
             </ul>
-            <a href="#" class="btn btn-ff w-100 mt-2">Send renewal reminders</a>
+            <button type="button" class="btn btn-ff w-100 mt-2" id="remindBtn">Send renewal reminders</button>
           </div>
 
           <!-- BMI mini -->
@@ -146,6 +161,102 @@
             </div>
             <button type="button" class="btn btn-ff btn-sm mt-3" onclick="ffCalculateBMI('dBmiWeight','dBmiHeight','dBmiResult')">Calculate</button>
             <div id="dBmiResult" class="mt-2 small"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trainer view (role dashboard demo) -->
+      <div id="viewTrainer" style="display:none">
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-people"></i></span><div class="k-label">Assigned members</div><div class="k-value">86</div><div class="small" style="color:var(--ff-muted)">Jake Thompson · Strength</div></div></div>
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-calendar-check"></i></span><div class="k-label">Members in today</div><div class="k-value">23</div><div class="small text-success">of 86 assigned</div></div></div>
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-collection"></i></span><div class="k-label">Classes this week</div><div class="k-value">6</div><div class="small" style="color:var(--ff-muted)">2 today</div></div></div>
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-stopwatch"></i></span><div class="k-label">My shift</div><div class="k-value fs-5 pt-2"><span class="status-pill st-active">On shift since 05:45</span></div><div class="small" style="color:var(--ff-muted)">Trainer attendance is tracked too</div></div></div>
+        </div>
+        <div class="row g-4">
+          <div class="col-xl-8">
+            <div class="panel mb-4"><h6 class="fw-bold mb-3">Trainer performance — assigned members &amp; member check-ins (30d)</h6><canvas id="trainerChart" class="chart"></canvas></div>
+            <div class="panel">
+              <h6 class="fw-bold mb-2">My members (excerpt)</h6>
+              <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Member</th><th>Plan</th><th>BMI</th><th>Visits (30d)</th><th>Goal progress</th></tr></thead>
+                <tbody>
+                  <tr><td class="fw-bold">Alex Carter</td><td>Annual</td><td>26.6</td><td>18</td><td><div class="progress" style="height:7px;background:#26262b"><div class="progress-bar" style="width:62%;background:var(--ff-orange)"></div></div><small style="color:var(--ff-muted)">Bench 100 kg — 62%</small></td></tr>
+                  <tr><td class="fw-bold">Daniel Brooks</td><td>Monthly</td><td>24.3</td><td>14</td><td><div class="progress" style="height:7px;background:#26262b"><div class="progress-bar" style="width:40%;background:var(--ff-orange)"></div></div><small style="color:var(--ff-muted)">Cut to 88 kg — 40%</small></td></tr>
+                  <tr><td class="fw-bold">Henry Ford</td><td>Quarterly</td><td>26.4</td><td>11</td><td><div class="progress" style="height:7px;background:#26262b"><div class="progress-bar" style="width:75%;background:var(--ff-orange)"></div></div><small style="color:var(--ff-muted)">Deadlift 180 kg — 75%</small></td></tr>
+                </tbody></table></div>
+              <p class="small mt-2 mb-0" style="color:var(--ff-muted)">Trainers only ever see their own assigned members — enforced server-side in the full app.</p>
+            </div>
+          </div>
+          <div class="col-xl-4">
+            <div class="panel mb-4">
+              <h6 class="fw-bold">Today's sessions</h6>
+              <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--ff-border)"><span><strong>Power Hour</strong> · Strength</span><span>06:00 · 18/20</span></div>
+              <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--ff-border)"><span><strong>Iron Strength</strong> · Barbell</span><span>17:30 · 14/16</span></div>
+              <div class="d-flex justify-content-between py-2"><span><strong>PT — Alex Carter</strong></span><span>19:00 · 1:1</span></div>
+            </div>
+            <div class="panel">
+              <h6 class="fw-bold text-warning"><i class="bi bi-alarm me-1"></i>My members expiring ≤14d</h6>
+              <ul class="list-unstyled mb-0 small">
+                <li class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--ff-border)"><span><strong>Ethan Wright</strong> · Monthly</span><span class="text-warning fw-bold">4 days</span></li>
+                <li class="d-flex justify-content-between py-2"><span><strong>Frank Miller</strong> · Annual</span><span class="text-warning fw-bold">9 days</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Member view (role dashboard demo) -->
+      <div id="viewMember" style="display:none">
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-fire"></i></span><div class="k-label">Visits (30 days)</div><div class="k-value">18</div><div class="small" style="color:var(--ff-muted)">64 all time</div></div></div>
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-card-checklist"></i></span><div class="k-label">Annual plan — days left</div><div class="k-value">91</div><div class="small" style="color:var(--ff-muted)">Renews 5 Feb 2027</div></div></div>
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-speedometer2"></i></span><div class="k-label">BMI</div><div class="k-value">26.5</div><div class="small" style="color:var(--ff-muted)">Overweight → target 24.9</div></div></div>
+          <div class="col-6 col-xl-3"><div class="kpi"><span class="k-icon"><i class="bi bi-trophy"></i></span><div class="k-label">Deadlift best</div><div class="k-value">140<span class="fs-6"> kg</span></div><div class="small text-success">New PR this week</div></div></div>
+        </div>
+        <div class="panel mb-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-end">
+            <div><h6 class="fw-bold mb-1">Alex Carter — Annual membership</h6>
+              <div class="small" style="color:var(--ff-muted)">Member ID FFP-M0001 · QR FFP-DEMO0001 · Valid 7 Nov 2026 → 5 Feb 2027</div></div>
+            <span class="status-pill st-active">Active</span>
+          </div>
+          <div class="progress mt-3" style="height:10px;background:#26262b"><div class="progress-bar" style="width:75%;background:var(--ff-orange)"></div></div>
+          <div class="small mt-1" style="color:var(--ff-muted)">75% of the membership period remaining</div>
+        </div>
+        <div class="row g-4">
+          <div class="col-xl-8">
+            <div class="panel mb-4"><h6 class="fw-bold mb-3">Weight progress</h6><canvas id="memberWeightChart" class="chart"></canvas></div>
+            <div class="panel">
+              <h6 class="fw-bold mb-2">Today's workout — Push Day</h6>
+              <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                <thead><tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th></tr></thead>
+                <tbody>
+                  <tr><td class="fw-bold">Bench Press</td><td>4</td><td>10</td><td>80 kg</td></tr>
+                  <tr><td class="fw-bold">Overhead Press</td><td>4</td><td>10</td><td>50 kg</td></tr>
+                  <tr><td class="fw-bold">Incline DB Press</td><td>3</td><td>12</td><td>30 kg</td></tr>
+                  <tr><td class="fw-bold">Triceps Pushdown</td><td>3</td><td>15</td><td>35 kg</td></tr>
+                </tbody></table></div>
+            </div>
+          </div>
+          <div class="col-xl-4">
+            <div class="panel mb-4">
+              <h6 class="fw-bold">My trainer</h6>
+              <div class="fw-bold">Jake Thompson</div>
+              <div class="small" style="color:var(--ff-muted)">Strength &amp; Conditioning</div>
+              <div class="small mt-1"><i class="bi bi-award me-1" style="color:var(--ff-orange)"></i>NASM-CPT, USA Powerlifting Coach</div>
+            </div>
+            <div class="panel mb-4">
+              <h6 class="fw-bold">Diet today — Muscle Gain · 2,850 kcal</h6>
+              <div class="py-1 border-bottom" style="border-color:var(--ff-border)"><strong>Breakfast</strong> <small style="color:var(--ff-muted)">07:30</small><br><span class="small">Oats, whey, banana, peanut butter</span></div>
+              <div class="py-1 border-bottom" style="border-color:var(--ff-border)"><strong>Lunch</strong> <small style="color:var(--ff-muted)">13:00</small><br><span class="small">Grilled chicken, rice, broccoli</span></div>
+              <div class="py-1"><strong>Dinner</strong> <small style="color:var(--ff-muted)">20:00</small><br><span class="small">Salmon, sweet potato, greens</span></div>
+            </div>
+            <div class="panel">
+              <h6 class="fw-bold">Last payments</h6>
+              <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--ff-border)"><span class="small">Annual membership<br><span style="color:var(--ff-muted)">7 Nov 2026</span></span><span class="text-end"><strong>$290.00</strong><br><span class="status-pill st-verified">verified</span></span></div>
+              <div class="d-flex justify-content-between py-2"><span class="small">PT package — 10 sessions<br><span style="color:var(--ff-muted)">28 Oct 2026</span></span><span class="text-end"><strong>$199.00</strong><br><span class="status-pill st-pending">pending</span></span></div>
+              <p class="small mt-2 mb-0" style="color:var(--ff-muted)">Pending payments are never shown as paid — they count only after gym verification.</p>
+            </div>
           </div>
         </div>
       </div>

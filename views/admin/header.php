@@ -13,6 +13,11 @@ $nav = function (string $slug, string $file, string $icon, string $label, string
     $b = $badge !== '' ? ' <span class="badge bg-danger ms-auto">' . e($badge) . '</span>' : '';
     return '<a href="' . e(url('admin/' . $file)) . '"' . $cls . '><i class="bi ' . $icon . '"></i>' . e($label) . $b . '</a>';
 };
+$navSa = function (string $slug, string $file, string $icon, string $label, string $badge = '') use ($activeNav): string {
+    $cls = $slug === $activeNav ? ' class="active"' : '';
+    $b = $badge !== '' ? ' <span class="badge bg-danger ms-auto">' . e($badge) . '</span>' : '';
+    return '<a href="' . e(url('super-admin/' . $file)) . '"' . $cls . '><i class="bi ' . $icon . '"></i>' . e($label) . $b . '</a>';
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -28,25 +33,26 @@ $nav = function (string $slug, string $file, string $icon, string $label, string
 <div class="dash">
   <aside class="sidebar" id="appSidebar">
     <div class="brand">
-      <a class="brand-mark" href="<?= e(url('admin/index.php')) ?>"><span class="bm-icon"><i class="bi bi-lightning-charge-fill"></i></span>FitFlow<span class="text-orange">Pro</span></a>
+      <a class="brand-mark" href="<?= e(url('super-admin/dashboard.php')) ?>"><span class="bm-icon"><i class="bi bi-lightning-charge-fill"></i></span>FitFlow<span class="text-orange">Pro</span></a>
       <div class="small mt-1" style="color:var(--ff-muted)">Platform Super Admin</div>
     </div>
     <nav>
       <div class="nav-head">Platform</div>
-      <?= $nav('overview', 'index.php', 'bi-speedometer2', 'Overview') ?>
-      <?= $nav('analytics', 'analytics.php', 'bi-graph-up-arrow', 'Revenue Analytics') ?>
-      <?= $nav('tenants', 'tenants.php', 'bi-buildings', 'Tenants (Gyms)') ?>
-      <?= $nav('users', 'users.php', 'bi-people', 'Users') ?>
+      <?= $navSa('dashboard', 'dashboard.php', 'bi-speedometer2', 'Dashboard') ?>
+      <?= $navSa('reports', 'reports.php', 'bi-graph-up-arrow', 'Reports & Analytics') ?>
+      <?= $navSa('gyms', 'gyms.php', 'bi-buildings', 'Gyms (Tenants)') ?>
+      <?= $navSa('users', 'users.php', 'bi-people', 'Users') ?>
       <div class="nav-head">Billing</div>
-      <?= $nav('plans', 'plans.php', 'bi-gem', 'Subscription Plans') ?>
+      <?= $navSa('plans', 'plans.php', 'bi-gem', 'Subscription Plans') ?>
+      <?= $navSa('subscriptions', 'subscriptions.php', 'bi-arrow-repeat', 'Subscriptions') ?>
       <?= $nav('coupons', 'coupons.php', 'bi-ticket-percent', 'Coupons') ?>
-      <?= $nav('payments', 'payments.php', 'bi-credit-card', 'Payments') ?>
+      <?= $navSa('payments', 'payments.php', 'bi-credit-card', 'Payments') ?>
       <?= $nav('invoices', 'invoices.php', 'bi-receipt', 'Invoices') ?>
       <div class="nav-head">Operations</div>
       <?= $nav('tickets', 'tickets.php', 'bi-life-preserver', 'Support Tickets', $openTickets > 0 ? (string) $openTickets : '') ?>
       <?= $nav('announcements', 'announcements.php', 'bi-megaphone', 'Announcements') ?>
       <?= $nav('logs', 'logs.php', 'bi-list-columns', 'Activity Logs') ?>
-      <?= $nav('settings', 'settings.php', 'bi-sliders', 'Platform Settings') ?>
+      <?= $navSa('settings', 'settings.php', 'bi-sliders', 'Platform Settings') ?>
     </nav>
   </aside>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -61,7 +67,7 @@ $nav = function (string $slug, string $file, string $icon, string $label, string
             <span class="d-none d-md-inline text-start"><span class="d-block fw-bold small"><?= e($user['name'] ?? '') ?></span><span class="d-block small" style="color:var(--ff-muted)">Super Admin</span></span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
-            <li><a class="dropdown-item" href="<?= e(url('admin/settings.php')) ?>"><i class="bi bi-sliders me-2"></i>Platform Settings</a></li>
+            <li><a class="dropdown-item" href="<?= e(url('super-admin/settings.php')) ?>"><i class="bi bi-sliders me-2"></i>Platform Settings</a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="<?= e(url('public/logout.php')) ?>"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
           </ul>

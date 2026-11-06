@@ -120,3 +120,99 @@
     new Chart(plan, { type: 'doughnut', data: { labels: ['Monthly', 'Quarterly', 'Annual', 'Student'], datasets: [{ data: [248, 186, 92, 64], backgroundColor: ['#f97316', '#fbbf24', '#38bdf8', '#22c55e'] }] }, options: { plugins: { legend: { labels: { color: '#e4e4e7' } } } } });
   }
 })();
+
+
+// ---------------------------------------------------------------------
+// Upgrade demo: role dashboard switcher, extra charts, toasts, filters.
+// (Static mock data — the real app serves these from its JSON API.)
+// ---------------------------------------------------------------------
+(function () {
+  // Toast helper (demo-local, dark styled)
+  function toast(msg) {
+    var box = document.getElementById('demoToastBox');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'demoToastBox';
+      box.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2000;display:flex;flex-direction:column;gap:8px';
+      document.body.appendChild(box);
+    }
+    var el = document.createElement('div');
+    el.style.cssText = 'background:#17171a;border:1px solid #2b2b30;border-left:4px solid #f97316;color:#e4e4e7;padding:10px 14px;border-radius:8px;max-width:320px;font-size:.9rem;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+    el.textContent = msg;
+    box.appendChild(el);
+    setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(function () { el.remove(); }, 420); }, 3400);
+  }
+  window.demoToast = toast;
+
+  // Renewal reminders mock action
+  var remind = document.getElementById('remindBtn');
+  if (remind) remind.addEventListener('click', function () {
+    toast('Renewal reminders sent to 3 members expiring within 30 days (demo).');
+  });
+
+  // Member status filter (works together with the top-bar search)
+  var statusFilter = document.getElementById('memberStatusFilter');
+  function applyMemberFilters() {
+    var q = (document.getElementById('memberSearch') || {}).value || '';
+    q = q.toLowerCase();
+    var st = statusFilter ? statusFilter.value : '';
+    document.querySelectorAll('#membersTable tbody tr').forEach(function (row) {
+      var text = row.textContent.toLowerCase();
+      var okQ = text.indexOf(q) > -1;
+      var okS = !st || row.textContent.indexOf(st) > -1;
+      row.style.display = okQ && okS ? '' : 'none';
+    });
+  }
+  if (statusFilter) statusFilter.addEventListener('change', applyMemberFilters);
+  var ms = document.getElementById('memberSearch');
+  if (ms) ms.addEventListener('input', applyMemberFilters);
+
+  // Role dashboard switcher
+  var roleInfo = {
+    admin:   { name: 'Sarah Mitchell', role: 'Gym Admin · Iron Paradise' },
+    trainer: { name: 'Jake Thompson', role: 'Trainer · Iron Paradise' },
+    member:  { name: 'Alex Carter', role: 'Member · Iron Paradise' }
+  };
+  var chartsBuilt = {};
+  function buildRoleCharts(view) {
+    if (!window.Chart || chartsBuilt[view]) return;
+    if (view === 'trainer') {
+      var tc = document.getElementById('trainerChart');
+      if (tc) {
+        chartsBuilt.trainer = new Chart(tc, { type: 'bar', data: { labels: ['Jake Thompson', 'Ryan Delgado', 'Chris Novak', 'Sam Whitaker'], datasets: [
+          { label: 'Assigned members', data: [86, 74, 68, 41], backgroundColor: 'rgba(249,115,22,.6)', borderColor: '#f97316', borderWidth: 1 },
+          { label: 'Member check-ins (30d)', data: [412, 356, 388, 190], backgroundColor: 'rgba(56,189,248,.55)', borderColor: '#38bdf8', borderWidth: 1 }
+        ] }, options: { plugins: { legend: { labels: { color: '#e4e4e7' } } }, scales: { y: { beginAtZero: true } } } });
+      }
+    }
+    if (view === 'member') {
+      var mc = document.getElementById('memberWeightChart');
+      if (mc) {
+        chartsBuilt.member = new Chart(mc, { type: 'line', data: { labels: ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'], datasets: [
+          { label: 'Weight (kg)', data: [92, 90.4, 89.1, 87.8, 86.9, 86.0], borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,.18)', fill: true, tension: .35 }
+        ] }, options: { plugins: { legend: { labels: { color: '#e4e4e7' } } }, scales: { y: { beginAtZero: false } } } });
+      }
+    }
+  }
+  function setRole(view) {
+    var adminBlocks = [document.getElementById('adminKpis'), document.getElementById('adminMain')];
+    var trainerView = document.getElementById('viewTrainer');
+    var memberView = document.getElementById('viewMember');
+    adminBlocks.forEach(function (el) { if (el) el.style.display = view === 'admin' ? '' : 'none'; });
+    if (trainerView) trainerView.style.display = view === 'trainer' ? '' : 'none';
+    if (memberView) memberView.style.display = view === 'member' ? '' : 'none';
+    document.querySelectorAll('[data-role-view]').forEach(function (btn) {
+      var active = btn.getAttribute('data-role-view') === view;
+      btn.classList.toggle('btn-ff', active);
+      btn.classList.toggle('btn-ff-outline', !active);
+    });
+    var name = document.getElementById('sideUserName');
+    var role = document.getElementById('sideUserRole');
+    if (name && roleInfo[view]) name.textContent = roleInfo[view].name;
+    if (role && roleInfo[view]) role.textContent = roleInfo[view].role;
+    buildRoleCharts(view);
+  }
+  document.querySelectorAll('[data-role-view]').forEach(function (btn) {
+    btn.addEventListener('click', function () { setRole(btn.getAttribute('data-role-view')); });
+  });
+})();

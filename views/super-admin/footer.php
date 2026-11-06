@@ -1,0 +1,10 @@
+    </div><!-- /.content -->
+    <div class="px-4 pb-3 small" style="color:var(--ff-muted)">FitFlow Pro · Platform administration · All figures are calculated live from the database.</div>
+  </div><!-- /.main -->
+</div><!-- /.dash -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="<?= e(url('public/assets/js/app.js')) ?>"></script>
+<?= $extraScripts ?? '' ?>
+</body>
+</html>

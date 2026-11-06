@@ -30,32 +30,58 @@ tokens); staff **invitations** with acceptance links; secure sessions
 Gym Owner, Gym Admin, Branch Manager, Trainer, Receptionist, Accountant,
 Member.
 
-### Super Admin (`admin/`)
+### Super Admin (`super-admin/`)
 Live-computed totals (tenants, active/suspended, users, active/expired
-subscriptions, **MRR/ARR**, transactions), subscription plan CRUD, coupon
-management, tenant suspend/reactivate, user management, payment
-verification, invoices, support tickets, announcements (broadcast to all
-tenants), revenue & growth analytics (Chart.js), activity + audit logs,
-platform settings. **No hardcoded stats** — everything is a real query.
+subscriptions, **MRR/ARR**, transactions), gym approvals /
+suspend / reactivate / cancel with trial extensions, subscription plan
+CRUD with usage limits, subscription management (change plan / extend /
+cancel), coupon management, user management, payment verification,
+invoices, support tickets, announcements (broadcast to all tenants),
+revenue & growth analytics (Chart.js) with CSV export, activity + audit
+logs, platform settings. **No hardcoded stats** — everything is a real
+query served by the pages or the JSON API (`api/super-stats.php`).
+The classic platform modules (coupons, invoices, tickets, announcements,
+logs) remain available from the same sidebar.
 
-### Gym Admin (`tenant/`)
-Dark charcoal + orange dashboard with sidebar, topbar, global member
-search, notifications and profile menu:
-Overview KPIs & charts · Members CRUD · Membership Plans · **Membership
-Registration (enrolment)** · Renewals (expiry alerts + reminders) ·
-Payments & Invoices (record → **verify** → receipt) · Attendance ·
-**QR-Based Check-in** (unique member QR token, scan toggles in/out) ·
-Trainers & Schedules · Workout Programs · Exercise Library · Diet Plans ·
-Fitness Classes & Bookings (capacity-checked) · Equipment & Maintenance ·
-Staff invitations · Multi-Branch management · Reports & Analytics with CSV
-export & print · Subscription management · Support tickets · Settings
-(logo upload, branding, password, 2FA secret).
+### Gym Admin (`admin/` — upgraded dashboard tree)
+AJAX-powered dashboard with date filters and one-click refresh: live KPIs
+(total/active members, new registrations, expired + expiring memberships,
+verified revenue, pending payments, today's check-ins, trainers, active
+classes, equipment alerts) and Chart.js charts fed by the JSON API
+(monthly revenue, membership growth, daily attendance, plan distribution,
+trainer performance). **Members**: live search / filters / pagination,
+modal CRUD with photos, unique membership IDs (FFP-M…), emergency
+contacts, restricted **medical clearance records**, progress logging, CSV
+export. **Memberships**: monthly / quarterly / half-yearly / yearly plans,
+assignment with coupons, automatic expiry + status calculation, renew /
+suspend / reactivate / cancel / upgrade, printable receipts, renewal
+reminders. **Attendance**: QR + manual check-in (duplicate active
+check-ins refused), trainer attendance, daily/weekly/monthly reports,
+corrections with a full audit trail. Plus trainers (qualifications,
+schedules), workouts (structured exercise builder + completion logs),
+diet plans, capacity-checked class bookings, equipment + maintenance,
+staff + **salary records**, **expenses** and finance summaries, reports
+with CSV exports, and gym branding/settings.
+
+### Classic Gym workspace (`tenant/`)
+The original 23-page workspace remains fully available and linked from
+the new sidebar: enrolment, renewals, branches, schedules, maintenance,
+subscription & billing, support tickets, and more.
+
+### Trainer portal (`trainer/`)
+A dedicated dashboard for coaches: assigned members only (enforced
+server-side), training schedules, workout plans, diet plans, own shift
+check-in/out, member attendance, and member progress (weight/BMI charts,
+goals, personal bests).
 
 ### Member portal (`member/`)
-Membership status + countdown, QR token card, self-service renew/switch
-(with coupons), payment & invoice history, attendance history + streaks,
-assigned workouts, class booking, diet plans, BMI + goal tracking with
-progress charts and weigh-ins.
+New rich **dashboard** (`member/dashboard.php`): active membership with
+expiry countdown + progress bar, attendance history, today's workout,
+assigned trainer card, diet summary, payment history, fitness goals and
+notifications — alongside the classic pages: membership status + QR token
+card, self-service renew/switch (with coupons), payment & invoice
+history, attendance history + streaks, assigned workouts, class booking,
+diet plans, BMI + goal tracking with progress charts and weigh-ins.
 
 ### Subscription system
 Free Trial / Starter / Professional / Business / Enterprise plans, monthly
@@ -121,17 +147,38 @@ Coupon codes: `WELCOME10` (10% off), `FIT20` (20% off).
 
 ```
 config/            App + database configuration (env-driven)
-app/               Bootstrap, Database (PDO), Auth, helpers, Models (21)
-database/          database.sql (36 tables + seeds), install.php
+app/               Bootstrap, Database (PDO), Auth, helpers, Models (26)
+api/               JSON API for the AJAX layer (11 endpoints, session + CSRF)
+database/          database.sql (42 tables + seeds), install.php,
+                   migrations/ (numbered non-destructive upgrades 001–003)
 public/            Marketing website + auth pages (entry: public/index.php)
-admin/             Super Admin dashboard (12 pages)
-tenant/            Gym Admin dashboard (23 pages)
-member/            Member portal (7 pages)
-views/             Layouts (website / admin / tenant / member)
+super-admin/       Super Admin dashboard tree (8 pages)
+admin/             Gym Admin dashboard tree (13 pages + printable receipt);
+                   legacy platform modules (coupons, invoices, tickets,
+                   announcements, logs) also live here
+tenant/            Classic Gym workspace (23 pages)
+trainer/           Trainer portal (7 pages)
+member/            Member portal (8 pages incl. new dashboard)
+views/             Layouts (website / admin / tenant / member /
+                   super-admin / gym-admin / trainer)
 storage/           logs, uploads, backups (runtime)
 docs/              SECURITY.md, API.md
-vercel-demo/       Static HTML/CSS/JS demo (landing + dashboard UI)
+vercel-demo/       Static HTML/CSS/JS demo (landing + role dashboards UI)
 ```
+
+## Upgrading an existing installation
+
+Run the numbered, non-destructive migrations in order — they only add
+columns/tables/permissions and backfill member codes:
+
+```bash
+mysql -u root -p fitflow_pro < database/migrations/001_member_trainer_enrichment.sql
+mysql -u root -p fitflow_pro < database/migrations/002_finance_medical_attendance_tables.sql
+mysql -u root -p fitflow_pro < database/migrations/003_permissions_upgrade.sql
+```
+
+Fresh installs need nothing extra: `database.sql` already includes
+everything. See `UPGRADE-SUMMARY.md` for the full upgrade notes.
 
 ## Deployment notes
 

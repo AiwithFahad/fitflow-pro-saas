@@ -15,7 +15,9 @@ DROP TABLE IF EXISTS audit_logs, activity_logs, support_tickets, notifications, 
   invitations, password_resets, login_attempts, announcements, users, role_permissions,
   permissions, roles, tenants, class_bookings, classes, equipment_maintenance, equipment,
   progress_records, fitness_goals, diet_plans, workouts, exercises, trainer_schedules,
-  attendance, memberships, membership_plans, trainers, members, branches;
+  attendance, memberships, membership_plans, trainers, members, branches,
+  member_medical_records, staff_salaries, expenses, trainer_attendance,
+  attendance_corrections, workout_logs;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ---------------------------------------------------------------------
@@ -316,6 +318,7 @@ CREATE TABLE trainers (
   phone         VARCHAR(40) NULL,
   photo_url     VARCHAR(255) NULL,
   specialty     VARCHAR(120) NULL,
+  qualifications VARCHAR(255) NULL,
   experience_years INT NOT NULL DEFAULT 0,
   bio           TEXT NULL,
   status        ENUM('active','inactive') NOT NULL DEFAULT 'active',
@@ -348,16 +351,22 @@ CREATE TABLE members (
   name         VARCHAR(120) NOT NULL,
   email        VARCHAR(150) NULL,
   phone        VARCHAR(40) NULL,
+  photo_url    VARCHAR(255) NULL,
+  address      VARCHAR(255) NULL,
+  emergency_contact_name  VARCHAR(120) NULL,
+  emergency_contact_phone VARCHAR(40) NULL,
+  member_code  VARCHAR(20) NULL,
   gender       ENUM('male','female','other') NOT NULL DEFAULT 'male',
   date_of_birth DATE NULL,
   height_cm    DECIMAL(5,1) NULL,
   weight_kg    DECIMAL(5,1) NULL,
   bmi          DECIMAL(4,1) NULL,
   qr_token     VARCHAR(40) NOT NULL UNIQUE,
-  status       ENUM('active','inactive','cancelled') NOT NULL DEFAULT 'active',
+  status       ENUM('active','inactive','cancelled','suspended') NOT NULL DEFAULT 'active',
   joined_at    DATE NULL,
   created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_member_code (member_code),
   INDEX idx_member_tenant (tenant_id),
   INDEX idx_member_trainer (trainer_id),
   CONSTRAINT fk_member_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -388,7 +397,7 @@ CREATE TABLE memberships (
   price      DECIMAL(10,2) NOT NULL DEFAULT 0,
   start_date DATE NOT NULL,
   end_date   DATE NOT NULL,
-  status     ENUM('active','expired','cancelled') NOT NULL DEFAULT 'active',
+  status     ENUM('active','expired','cancelled','suspended') NOT NULL DEFAULT 'active',
   coupon_id  INT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_ms_member (member_id),
@@ -569,6 +578,123 @@ CREATE TABLE equipment_maintenance (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
+-- UPGRADE TABLES (migrations 001–003 folded in)
+-- ---------------------------------------------------------------------
+
+CREATE TABLE member_medical_records (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id        INT UNSIGNED NOT NULL,
+  member_id        INT UNSIGNED NOT NULL,
+  clearance_status ENUM('cleared','pending','restricted','expired') NOT NULL DEFAULT 'pending',
+  conditions       TEXT NULL,
+  allergies        TEXT NULL,
+  medications      TEXT NULL,
+  doctor_name      VARCHAR(120) NULL,
+  clearance_date   DATE NULL,
+  expiry_date      DATE NULL,
+  notes            TEXT NULL,
+  recorded_by      INT UNSIGNED NULL,
+  created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_med_member (member_id),
+  CONSTRAINT fk_med_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_med_member FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+  CONSTRAINT fk_med_user FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE staff_salaries (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id    INT UNSIGNED NOT NULL,
+  user_id      INT UNSIGNED NULL,
+  trainer_id   INT UNSIGNED NULL,
+  person_name  VARCHAR(120) NOT NULL,
+  role_label   VARCHAR(80) NULL,
+  period_month VARCHAR(7) NOT NULL,
+  base_salary  DECIMAL(10,2) NOT NULL DEFAULT 0,
+  allowances   DECIMAL(10,2) NOT NULL DEFAULT 0,
+  deductions   DECIMAL(10,2) NOT NULL DEFAULT 0,
+  method       VARCHAR(40) NOT NULL DEFAULT 'bank',
+  status       ENUM('pending','paid') NOT NULL DEFAULT 'pending',
+  paid_at      DATETIME NULL,
+  notes        VARCHAR(255) NULL,
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_sal_tenant (tenant_id, period_month),
+  CONSTRAINT fk_sal_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sal_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_sal_trainer FOREIGN KEY (trainer_id) REFERENCES trainers(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE expenses (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id    INT UNSIGNED NOT NULL,
+  branch_id    INT UNSIGNED NULL,
+  category     VARCHAR(60) NOT NULL DEFAULT 'General',
+  title        VARCHAR(180) NOT NULL,
+  amount       DECIMAL(10,2) NOT NULL DEFAULT 0,
+  expense_date DATE NOT NULL,
+  method       VARCHAR(40) NOT NULL DEFAULT 'bank',
+  reference    VARCHAR(100) NULL,
+  recorded_by  INT UNSIGNED NULL,
+  notes        VARCHAR(255) NULL,
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_exp_tenant (tenant_id, expense_date),
+  CONSTRAINT fk_exp_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_exp_branch FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+  CONSTRAINT fk_exp_user FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE trainer_attendance (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id    INT UNSIGNED NOT NULL,
+  trainer_id   INT UNSIGNED NOT NULL,
+  branch_id    INT UNSIGNED NULL,
+  check_in_at  DATETIME NOT NULL,
+  check_out_at DATETIME NULL,
+  method       ENUM('manual','qr') NOT NULL DEFAULT 'manual',
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_tatt_trainer (trainer_id, check_in_at),
+  CONSTRAINT fk_tatt_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tatt_trainer FOREIGN KEY (trainer_id) REFERENCES trainers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tatt_branch FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE attendance_corrections (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id     INT UNSIGNED NOT NULL,
+  attendance_id INT UNSIGNED NULL,
+  subject_type  ENUM('member','trainer') NOT NULL DEFAULT 'member',
+  subject_id    INT UNSIGNED NOT NULL,
+  corrected_by  INT UNSIGNED NULL,
+  field         VARCHAR(40) NOT NULL,
+  old_value     VARCHAR(100) NULL,
+  new_value     VARCHAR(100) NULL,
+  reason        VARCHAR(255) NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_corr_tenant (tenant_id, created_at),
+  CONSTRAINT fk_corr_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_corr_user FOREIGN KEY (corrected_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE workout_logs (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  tenant_id     INT UNSIGNED NOT NULL,
+  member_id     INT UNSIGNED NOT NULL,
+  workout_id    INT UNSIGNED NULL,
+  exercise_name VARCHAR(120) NOT NULL,
+  sets          INT NULL,
+  reps          INT NULL,
+  weight_kg     DECIMAL(6,1) NULL,
+  duration_min  INT NULL,
+  notes         VARCHAR(255) NULL,
+  completed_at  DATETIME NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_wlog_member (member_id, completed_at),
+  CONSTRAINT fk_wlog_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wlog_member FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wlog_workout FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
 -- SEED DATA — roles, permissions, plans
 -- Bcrypt hash below = the word "password" (password_hash compatible).
 -- ---------------------------------------------------------------------
@@ -596,7 +722,10 @@ INSERT INTO permissions (slug, description) VALUES
 ('branches.manage','Manage branches'), ('reports.view','View reports and analytics'), ('settings.manage','Manage gym settings'),
 ('subscription.manage','Manage SaaS subscription'), ('tickets.manage','Manage support tickets'),
 ('platform.tenants','Manage platform tenants'), ('platform.plans','Manage platform plans'),
-('platform.payments','Manage platform payments'), ('portal.access','Access member portal');
+('platform.payments','Manage platform payments'), ('portal.access','Access member portal'),
+('members.medical','View and manage member medical clearance records (restricted)'),
+('finance.view','View expenses, salaries and financial summaries'), ('finance.manage','Manage expenses and salary records'),
+('attendance.correct','Correct attendance records with audit logging'), ('trainers.attendance','Manage trainer attendance');
 
 -- Gym Owner: everything tenant-side. Super Admin: everything (checked in code too).
 INSERT INTO role_permissions (role_id, permission_id)
@@ -606,13 +735,13 @@ INSERT INTO role_permissions (role_id, permission_id)
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT 3, id FROM permissions WHERE slug NOT LIKE 'platform.%' AND slug NOT IN ('members.delete');
 INSERT INTO role_permissions (role_id, permission_id)
-  SELECT 4, id FROM permissions WHERE slug IN ('dashboard.view','members.view','members.create','members.edit','attendance.view','attendance.manage','memberships.view','classes.view','classes.manage','equipment.view','reports.view');
+  SELECT 4, id FROM permissions WHERE slug IN ('dashboard.view','members.view','members.create','members.edit','attendance.view','attendance.manage','memberships.view','classes.view','classes.manage','equipment.view','reports.view','attendance.correct','trainers.attendance');
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT 5, id FROM permissions WHERE slug IN ('dashboard.view','members.view','attendance.view','workouts.view','workouts.manage','diet.view','diet.manage','classes.view');
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT 6, id FROM permissions WHERE slug IN ('dashboard.view','members.view','members.create','members.edit','attendance.view','attendance.manage','memberships.view','memberships.manage','payments.view','classes.view');
 INSERT INTO role_permissions (role_id, permission_id)
-  SELECT 7, id FROM permissions WHERE slug IN ('dashboard.view','payments.view','payments.manage','payments.verify','invoices.view','reports.view','members.view');
+  SELECT 7, id FROM permissions WHERE slug IN ('dashboard.view','payments.view','payments.manage','payments.verify','invoices.view','reports.view','members.view','finance.view','finance.manage');
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT 8, id FROM permissions WHERE slug IN ('portal.access');
 
@@ -650,11 +779,11 @@ INSERT INTO users (id, tenant_id, role_id, name, email, phone, password_hash, st
 (8, 1,    8, 'Alex Carter',      'member@demo.com',      '+1 555 777 8899', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'active', NOW());
 
 -- Trainers -------------------------------------------------------------
-INSERT INTO trainers (id, tenant_id, user_id, branch_id, name, email, phone, specialty, experience_years, bio, status) VALUES
-(1, 1, 5,    1, 'Jake Thompson', 'trainer@demo.com', '+1 555 444 5566', 'Strength & Conditioning', 8,  'Former powerlifting coach specialising in progressive overload programs.', 'active'),
-(2, 1, NULL, 1, 'Ryan Delgado',  'ryan@ironparadise.example', '+1 555 101 2020', 'Bodybuilding', 10, 'IFBB competitor and hypertrophy specialist.', 'active'),
-(3, 1, NULL, 2, 'Chris Novak',   'chris@ironparadise.example', '+1 555 303 4040', 'Cardio & Weight Loss', 6, 'HIIT and metabolic conditioning coach.', 'active'),
-(4, 1, NULL, 1, 'Sam Whitaker',  'sam@ironparadise.example', '+1 555 505 6060', 'Mobility & Recovery', 5, 'Movement quality, mobility and injury-prevention coach.', 'active');
+INSERT INTO trainers (id, tenant_id, user_id, branch_id, name, email, phone, specialty, qualifications, experience_years, bio, status) VALUES
+(1, 1, 5,    1, 'Jake Thompson', 'trainer@demo.com', '+1 555 444 5566', 'Strength & Conditioning', 'NASM-CPT, USA Powerlifting Coach', 8,  'Former powerlifting coach specialising in progressive overload programs.', 'active'),
+(2, 1, NULL, 1, 'Ryan Delgado',  'ryan@ironparadise.example', '+1 555 101 2020', 'Bodybuilding', 'IFBB Pro, ISSA Bodybuilding Specialist', 10, 'IFBB competitor and hypertrophy specialist.', 'active'),
+(3, 1, NULL, 2, 'Chris Novak',   'chris@ironparadise.example', '+1 555 303 4040', 'Cardio & Weight Loss', 'ACE-CPT, Precision Nutrition L1', 6, 'HIIT and metabolic conditioning coach.', 'active'),
+(4, 1, NULL, 1, 'Sam Whitaker',  'sam@ironparadise.example', '+1 555 505 6060', 'Mobility & Recovery', 'FRC Mobility Specialist, FMS L2', 5, 'Movement quality, mobility and injury-prevention coach.', 'active');
 
 INSERT INTO trainer_schedules (tenant_id, trainer_id, day_of_week, start_time, end_time) VALUES
 (1, 1, 'Monday', '06:00:00', '14:00:00'), (1, 1, 'Wednesday', '06:00:00', '14:00:00'), (1, 1, 'Friday', '06:00:00', '14:00:00'),
@@ -663,17 +792,21 @@ INSERT INTO trainer_schedules (tenant_id, trainer_id, day_of_week, start_time, e
 (1, 4, 'Saturday', '08:00:00', '12:00:00'), (1, 4, 'Sunday', '08:00:00', '12:00:00');
 
 -- Members ---------------------------------------------------------------
-INSERT INTO members (id, tenant_id, user_id, branch_id, trainer_id, name, email, phone, gender, date_of_birth, height_cm, weight_kg, bmi, qr_token, status, joined_at) VALUES
-(1,  1, 8,    1, 1, 'Alex Carter',   'member@demo.com',   '+1 555 777 8899', 'male', '1996-04-12', 180.0, 86.0, 26.5, 'FFP-DEMO0001', 'active', DATE_SUB(CURDATE(), INTERVAL 90 DAY)),
-(2,  1, NULL, 1, 2, 'Brian Cole',    'brian@example.com', '+1 555 201 3001', 'male', '1993-08-03', 175.0, 78.5, 25.6, 'FFP-DEMO0002', 'active', DATE_SUB(CURDATE(), INTERVAL 75 DAY)),
-(3,  1, NULL, 1, 1, 'Daniel Brooks', 'daniel@example.com','+1 555 201 3002', 'male', '1990-01-25', 182.0, 95.0, 28.7, 'FFP-DEMO0003', 'active', DATE_SUB(CURDATE(), INTERVAL 60 DAY)),
-(4,  1, NULL, 2, 3, 'Ethan Wright',  'ethan@example.com', '+1 555 201 3003', 'male', '1998-11-19', 170.0, 70.0, 24.2, 'FFP-DEMO0004', 'active', DATE_SUB(CURDATE(), INTERVAL 45 DAY)),
-(5,  1, NULL, 1, 2, 'Frank Miller',  'frank@example.com', '+1 555 201 3004', 'male', '1988-06-30', 178.0, 102.0, 32.2, 'FFP-DEMO0005', 'active', DATE_SUB(CURDATE(), INTERVAL 120 DAY)),
-(6,  1, NULL, 1, 3, 'George Lane',   'george@example.com','+1 555 201 3005', 'male', '1995-02-14', 176.0, 74.0, 23.9, 'FFP-DEMO0006', 'active', DATE_SUB(CURDATE(), INTERVAL 30 DAY)),
-(7,  1, NULL, 2, 1, 'Henry Ford',    'henry@example.com', '+1 555 201 3006', 'male', '1992-09-08', 185.0, 90.5, 26.4, 'FFP-DEMO0007', 'active', DATE_SUB(CURDATE(), INTERVAL 150 DAY)),
-(8,  1, NULL, 1, 4, 'Ian Douglas',   'ian@example.com',   '+1 555 201 3007', 'male', '1999-12-01', 172.0, 68.0, 23.0, 'FFP-DEMO0008', 'active', DATE_SUB(CURDATE(), INTERVAL 20 DAY)),
-(9,  1, NULL, 1, 2, 'Jack Morris',   'jack@example.com',  '+1 555 201 3008', 'male', '1994-05-17', 179.0, 82.0, 25.6, 'FFP-DEMO0009', 'active', DATE_SUB(CURDATE(), INTERVAL 10 DAY)),
-(10, 1, NULL, 2, 3, 'Kevin Shaw',    'kevin@example.com', '+1 555 201 3009', 'male', '1991-03-22', 177.0, 88.0, 28.1, 'FFP-DEMO0010', 'active', DATE_SUB(CURDATE(), INTERVAL 200 DAY));
+INSERT INTO members (id, tenant_id, user_id, branch_id, trainer_id, name, email, phone, photo_url, address, emergency_contact_name, emergency_contact_phone, member_code, gender, date_of_birth, height_cm, weight_kg, bmi, qr_token, status, joined_at) VALUES
+(1,  1, 8,    1, 1, 'Alex Carter',   'member@demo.com',   '+1 555 777 8899', 'https://randomuser.me/api/portraits/men/32.jpg', '14 Oak Ridge Dr, Austin', 'Emma Carter', '+1 555 777 8800', 'FFP-M0001', 'male', '1996-04-12', 180.0, 86.0, 26.5, 'FFP-DEMO0001', 'active', DATE_SUB(CURDATE(), INTERVAL 90 DAY)),
+(2,  1, NULL, 1, 2, 'Brian Cole',    'brian@example.com', '+1 555 201 3001', 'https://randomuser.me/api/portraits/men/45.jpg', '220 Pine St, Austin', 'Laura Cole', '+1 555 201 3101', 'FFP-M0002', 'male', '1993-08-03', 175.0, 78.5, 25.6, 'FFP-DEMO0002', 'active', DATE_SUB(CURDATE(), INTERVAL 75 DAY)),
+(3,  1, NULL, 1, 1, 'Daniel Brooks', 'daniel@example.com','+1 555 201 3002', 'https://randomuser.me/api/portraits/men/67.jpg', '9 Birchwood Ln, Austin', 'Kate Brooks', '+1 555 201 3102', 'FFP-M0003', 'male', '1990-01-25', 182.0, 95.0, 28.7, 'FFP-DEMO0003', 'active', DATE_SUB(CURDATE(), INTERVAL 60 DAY)),
+(4,  1, NULL, 2, 3, 'Ethan Wright',  'ethan@example.com', '+1 555 201 3003', NULL, '77 Cedar Ave, Austin', 'Paul Wright', '+1 555 201 3103', 'FFP-M0004', 'male', '1998-11-19', 170.0, 70.0, 24.2, 'FFP-DEMO0004', 'active', DATE_SUB(CURDATE(), INTERVAL 45 DAY)),
+(5,  1, NULL, 1, 2, 'Frank Miller',  'frank@example.com', '+1 555 201 3004', 'https://randomuser.me/api/portraits/men/85.jpg', '310 Elm St, Austin', 'Grace Miller', '+1 555 201 3104', 'FFP-M0005', 'male', '1988-06-30', 178.0, 102.0, 32.2, 'FFP-DEMO0005', 'active', DATE_SUB(CURDATE(), INTERVAL 120 DAY)),
+(6,  1, NULL, 1, 3, 'George Lane',   'george@example.com','+1 555 201 3005', NULL, '51 Maple Dr, Austin', 'Nina Lane', '+1 555 201 3105', 'FFP-M0006', 'male', '1995-02-14', 176.0, 74.0, 23.9, 'FFP-DEMO0006', 'active', DATE_SUB(CURDATE(), INTERVAL 30 DAY)),
+(7,  1, NULL, 2, 1, 'Henry Ford',    'henry@example.com', '+1 555 201 3006', NULL, '18 Walnut St, Austin', 'Amy Ford', '+1 555 201 3106', 'FFP-M0007', 'male', '1992-09-08', 185.0, 90.5, 26.4, 'FFP-DEMO0007', 'active', DATE_SUB(CURDATE(), INTERVAL 150 DAY)),
+(8,  1, NULL, 1, 4, 'Ian Douglas',   'ian@example.com',   '+1 555 201 3007', NULL, '63 Cherry Ln, Austin', 'Tom Douglas', '+1 555 201 3107', 'FFP-M0008', 'male', '1999-12-01', 172.0, 68.0, 23.0, 'FFP-DEMO0008', 'active', DATE_SUB(CURDATE(), INTERVAL 20 DAY)),
+(9,  1, NULL, 1, 2, 'Jack Morris',   'jack@example.com',  '+1 555 201 3008', NULL, '102 Aspen Way, Austin', 'Ruth Morris', '+1 555 201 3108', 'FFP-M0009', 'male', '1994-05-17', 179.0, 82.0, 25.6, 'FFP-DEMO0009', 'active', DATE_SUB(CURDATE(), INTERVAL 10 DAY)),
+(10, 1, NULL, 2, 3, 'Kevin Shaw',    'kevin@example.com', '+1 555 201 3009', NULL, '240 Willow Ct, Austin', 'Dan Shaw', '+1 555 201 3109', 'FFP-M0010', 'male', '1991-03-22', 177.0, 88.0, 28.1, 'FFP-DEMO0010', 'active', DATE_SUB(CURDATE(), INTERVAL 200 DAY));
+
+-- Membership plans: add a Half-Yearly duration option -------------------
+INSERT INTO membership_plans (id, tenant_id, name, price, duration_days, description, features) VALUES
+(5, 1, 'Half-Yearly', 159.00, 180, '6 months of full access', 'Full gym access, Unlimited classes, 1 PT session / month, Diet plan included');
 
 -- Gym membership plans (sold to members) --------------------------------
 INSERT INTO membership_plans (id, tenant_id, name, price, duration_days, description, features) VALUES
@@ -812,3 +945,38 @@ INSERT INTO activity_logs (tenant_id, user_id, action, entity, entity_id, detail
 (1, 3, 'member.created', 'members', 9, 'Jack Morris registered at Main Branch'),
 (1, 7, 'payment.verified', 'payments', 4, 'Membership payment MBR-0009 verified'),
 (NULL, 1, 'tenant.status_checked', 'tenants', 1, 'Routine platform health check');
+
+-- Upgrade seeds: medical records, expenses, salaries, trainer attendance,
+-- one audited attendance correction and workout completion logs.
+INSERT INTO member_medical_records (id, tenant_id, member_id, clearance_status, conditions, allergies, medications, doctor_name, clearance_date, expiry_date, notes, recorded_by) VALUES
+(1, 1, 1, 'cleared',    'None reported', 'None known', 'None', 'Dr. Sarah Kim', DATE_SUB(CURDATE(), INTERVAL 30 DAY), DATE_ADD(CURDATE(), INTERVAL 335 DAY), 'Full clearance for strength training including heavy compound lifts.', 3),
+(2, 1, 5, 'restricted', 'Controlled hypertension', 'Penicillin', 'Lisinopril 10mg daily', 'Dr. Mark Webb', DATE_SUB(CURDATE(), INTERVAL 60 DAY), DATE_ADD(CURDATE(), INTERVAL 120 DAY), 'Cleared for moderate cardio only; no maximal-effort lifts until review.', 3);
+
+INSERT INTO expenses (id, tenant_id, branch_id, category, title, amount, expense_date, method, reference, recorded_by, notes) VALUES
+(1, 1, 1, 'Rent',      'Main Branch monthly rent',        2400.00, DATE_SUB(CURDATE(), INTERVAL 4 DAY),  'bank', 'TRX-RENT-1106', 3, 'November lease'),
+(2, 1, 1, 'Utilities', 'Electricity & water — Main Branch', 385.50, DATE_SUB(CURDATE(), INTERVAL 9 DAY),  'card', 'BILL-88412',      7, NULL),
+(3, 1, 2, 'Utilities', 'Electricity — Downtown Branch',    210.75, DATE_SUB(CURDATE(), INTERVAL 12 DAY), 'card', 'BILL-88455',      7, NULL),
+(4, 1, 1, 'Marketing', 'Instagram ads — new member drive', 150.00, DATE_SUB(CURDATE(), INTERVAL 15 DAY), 'card', 'ADS-NOV-01',      3, NULL),
+(5, 1, 1, 'Maintenance','Treadmill belt replacement',       95.00, DATE_SUB(CURDATE(), INTERVAL 20 DAY), 'cash', NULL,              3, 'Unit TM-02');
+
+INSERT INTO staff_salaries (id, tenant_id, user_id, trainer_id, person_name, role_label, period_month, base_salary, allowances, deductions, method, status, paid_at, notes) VALUES
+(1, 1, 5,    1, 'Jake Thompson', 'Head Trainer',     DATE_FORMAT(CURDATE(), '%Y-%m'), 2200.00, 150.00, 0.00,   'bank', 'paid',    DATE_SUB(NOW(), INTERVAL 2 DAY), 'Includes PT commission'),
+(2, 1, NULL, 2, 'Ryan Delgado',  'Trainer',          DATE_FORMAT(CURDATE(), '%Y-%m'), 1800.00, 100.00, 0.00,   'bank', 'pending', NULL, NULL),
+(3, 1, NULL, 3, 'Chris Novak',   'Trainer',          DATE_FORMAT(CURDATE(), '%Y-%m'), 1700.00, 100.00, 50.00,  'bank', 'pending', NULL, NULL),
+(4, 1, 6,    NULL, 'Olivia Reed','Receptionist',     DATE_FORMAT(CURDATE(), '%Y-%m'), 1200.00, 0.00,   0.00,   'bank', 'paid',    DATE_SUB(NOW(), INTERVAL 2 DAY), NULL);
+
+INSERT INTO trainer_attendance (id, tenant_id, trainer_id, branch_id, check_in_at, check_out_at, method) VALUES
+(1, 1, 1, 1, TIMESTAMP(CURDATE(), '05:45:00'), NULL, 'manual'),
+(2, 1, 2, 1, TIMESTAMP(CURDATE(), '06:00:00'), TIMESTAMP(CURDATE(), '10:00:00'), 'manual'),
+(3, 1, 3, 2, TIMESTAMP(CURDATE(), '07:15:00'), NULL, 'manual');
+
+INSERT INTO attendance_corrections (id, tenant_id, attendance_id, subject_type, subject_id, corrected_by, field, old_value, new_value, reason) VALUES
+(1, 1, 3, 'member', 3, 3, 'check_in_at', DATE_FORMAT(TIMESTAMP(CURDATE(), '07:30:00'), '%Y-%m-%d %H:%i:%s'), DATE_FORMAT(TIMESTAMP(CURDATE(), '07:05:00'), '%Y-%m-%d %H:%i:%s'), 'Front desk clock error — member arrived at 07:05, confirmed on camera.');
+
+INSERT INTO workout_logs (id, tenant_id, member_id, workout_id, exercise_name, sets, reps, weight_kg, duration_min, notes, completed_at) VALUES
+(1, 1, 1, 1, 'Barbell Squat',      4, 8,  100.0, NULL, 'Top set felt strong', DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(2, 1, 1, 1, 'Bench Press',        4, 10, 80.0,  NULL, NULL, DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(3, 1, 1, 1, 'Deadlift',           3, 5,  140.0, NULL, 'New personal best', DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(4, 1, 1, 2, 'Overhead Press',     4, 10, 50.0,  NULL, NULL, DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(5, 1, 3, 1, 'Barbell Squat',      4, 8,  90.0,  NULL, NULL, DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(6, 1, 2, 3, 'Romanian Deadlift',  4, 10, 90.0,  NULL, NULL, DATE_SUB(NOW(), INTERVAL 2 DAY));

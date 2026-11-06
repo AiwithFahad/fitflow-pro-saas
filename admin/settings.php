@@ -1,67 +1,125 @@
 <?php
 require_once __DIR__ . '/../app/bootstrap.php';
 require_login('../public/login.php');
-require_role(['Super Admin'], Auth::homeFor(current_user()));
-$dashTitle = 'Platform Settings';
+require_role(['Gym Owner', 'Gym Admin'], Auth::homeFor(current_user()));
+$tid = tenant_id();
+$dashTitle = 'Gym Settings';
 $activeNav = 'settings';
-
-$settingsFile = __DIR__ . '/../storage/settings.json';
-$settings = is_file($settingsFile) ? (json_decode((string) file_get_contents($settingsFile), true) ?: []) : [];
-$settings += [
-    'platform_name' => APP_CONFIG['name'],
-    'support_email' => 'support@fitflowpro.example',
-    'trial_days' => (int) (APP_CONFIG['trial_days'] ?? 14),
-    'grace_days' => (int) (APP_CONFIG['grace_days'] ?? 7),
-    'maintenance_mode' => 0,
-    'allow_registration' => 1,
-];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_csrf();
-    $settings['platform_name'] = trim($_POST['platform_name'] ?? $settings['platform_name']);
-    $settings['support_email'] = trim($_POST['support_email'] ?? $settings['support_email']);
-    $settings['trial_days'] = max(1, (int) ($_POST['trial_days'] ?? 14));
-    $settings['grace_days'] = max(0, (int) ($_POST['grace_days'] ?? 7));
-    $settings['maintenance_mode'] = isset($_POST['maintenance_mode']) ? 1 : 0;
-    $settings['allow_registration'] = isset($_POST['allow_registration']) ? 1 : 0;
-    file_put_contents($settingsFile, json_encode($settings, JSON_PRETTY_PRINT));
-    log_activity(null, 'platform.settings_updated', 'settings', null, 'Platform settings saved');
-    flash('success', 'Platform settings saved to storage/settings.json.');
+    if (!can('settings.manage')) {
+        flash('error', 'Your role cannot change gym settings.');
+        redirect(url('admin/settings.php'));
+    }
+    $action = $_POST['action'] ?? '';
+    if ($action === 'branding') {
+        Database::query(
+            'INSERT INTO tenant_settings (tenant_id, brand_color, currency, timezone, settings)
+             VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE brand_color = VALUES(brand_color), currency = VALUES(currency), timezone = VALUES(timezone), settings = VALUES(settings)',
+            [$tid, $_POST['brand_color'] ?? '#f97316', $_POST['currency'] ?? 'USD', $_POST['timezone'] ?? 'UTC',
+             json_encode(['checkin_method' => $_POST['checkin_method'] ?? 'qr', 'gym_tagline' => trim($_POST['gym_tagline'] ?? '')])]
+        );
+        flash('success', 'Branding and preferences saved.');
+    } elseif ($action === 'profile') {
+        Database::update('tenants', [
+            'name' => trim($_POST['name'] ?? ''),
+            'email' => trim($_POST['email'] ?? '') ?: null,
+            'phone' => trim($_POST['phone'] ?? '') ?: null,
+            'address' => trim($_POST['address'] ?? '') ?: null,
+            'city' => trim($_POST['city'] ?? '') ?: null,
+            'country' => trim($_POST['country'] ?? '') ?: null,
+        ], 'id = :wid', ['wid' => $tid]);
+        flash('success', 'Gym profile saved.');
+    } elseif ($action === 'notify') {
+        $title = trim($_POST['title'] ?? '');
+        if ($title !== '') {
+            notify($tid, null, $title, trim($_POST['body'] ?? ''), 'info');
+            flash('success', 'Notification sent to this gym\'s dashboards and member portals.');
+        } else {
+            flash('error', 'A notification title is required.');
+        }
+    }
     redirect(url('admin/settings.php'));
 }
 
-require __DIR__ . '/../views/admin/header.php';
+$tenant = Tenant::find($tid);
+$settings = Database::fetch('SELECT * FROM tenant_settings WHERE tenant_id = ?', [$tid]) ?: [];
+$prefs = json_decode((string) ($settings['settings'] ?? '{}'), true) ?: [];
+$sub = active_subscription($tid);
+$branches = Branch::withCounts($tid);
+require __DIR__ . '/../views/gym-admin/header.php';
 ?>
 <div class="row g-3">
-  <div class="col-lg-7">
-    <div class="panel">
-      <h5>General settings</h5>
+  <div class="col-lg-6">
+    <div class="panel mb-3">
+      <h5>Gym profile</h5>
       <form method="post">
-        <?= csrf_field() ?>
-        <div class="row g-3">
-          <div class="col-md-6"><label class="form-label">Platform name</label><input class="form-control" name="platform_name" value="<?= e($settings['platform_name']) ?>"></div>
-          <div class="col-md-6"><label class="form-label">Support email</label><input type="email" class="form-control" name="support_email" value="<?= e($settings['support_email']) ?>"></div>
-          <div class="col-md-6"><label class="form-label">Free trial length (days)</label><input type="number" class="form-control" name="trial_days" value="<?= (int) $settings['trial_days'] ?>"></div>
-          <div class="col-md-6"><label class="form-label">Subscription grace period (days)</label><input type="number" class="form-control" name="grace_days" value="<?= (int) $settings['grace_days'] ?>"></div>
-          <div class="col-md-6"><div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="allow_registration" id="allowReg" <?= $settings['allow_registration'] ? 'checked' : '' ?>><label class="form-check-label" for="allowReg">Allow new gym registrations</label></div></div>
-          <div class="col-md-6"><div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="maintenance_mode" id="maintMode" <?= $settings['maintenance_mode'] ? 'checked' : '' ?>><label class="form-check-label" for="maintMode">Maintenance mode</label></div></div>
+        <?= csrf_field() ?><input type="hidden" name="action" value="profile">
+        <div class="mb-2"><label class="form-label">Gym name</label><input class="form-control" name="name" required value="<?= e($tenant['name'] ?? '') ?>"></div>
+        <div class="row g-2">
+          <div class="col-6 mb-2"><label class="form-label">Email</label><input type="email" class="form-control" name="email" value="<?= e($tenant['email'] ?? '') ?>"></div>
+          <div class="col-6 mb-2"><label class="form-label">Phone</label><input class="form-control" name="phone" value="<?= e($tenant['phone'] ?? '') ?>"></div>
+          <div class="col-12 mb-2"><label class="form-label">Address</label><input class="form-control" name="address" value="<?= e($tenant['address'] ?? '') ?>"></div>
+          <div class="col-6 mb-2"><label class="form-label">City</label><input class="form-control" name="city" value="<?= e($tenant['city'] ?? '') ?>"></div>
+          <div class="col-6 mb-2"><label class="form-label">Country</label><input class="form-control" name="country" value="<?= e($tenant['country'] ?? '') ?>"></div>
         </div>
-        <button class="btn btn-ff mt-4">Save settings</button>
+        <button class="btn btn-ff">Save profile</button>
       </form>
     </div>
-  </div>
-  <div class="col-lg-5">
     <div class="panel">
-      <h5>Runtime configuration</h5>
-      <table class="table table-sm mb-0">
-        <tr><th>Environment</th><td><?= e(APP_CONFIG['env']) ?></td></tr>
-        <tr><th>Debug mode</th><td><?= APP_CONFIG['debug'] ? 'On (disable in production)' : 'Off' ?></td></tr>
-        <tr><th>Database</th><td><?= e((require __DIR__ . '/../config/database.php')['database']) ?></td></tr>
-        <tr><th>PHP version</th><td><?= e(PHP_VERSION) ?></td></tr>
-        <tr><th>Settings store</th><td>storage/settings.json</td></tr>
+      <h5>Branches</h5>
+      <?php foreach ($branches as $b): ?>
+        <div class="d-flex justify-content-between py-2 border-bottom" style="border-color:var(--ff-border)">
+          <span><strong><?= e($b['name']) ?></strong><br><small style="color:var(--ff-muted)"><?= e($b['city'] ?? '') ?> · <?= e($b['phone'] ?? '') ?></small></span>
+          <span class="small" style="color:var(--ff-muted)"><?= (int) ($b['member_count'] ?? 0) ?> members</span>
+        </div>
+      <?php endforeach; ?>
+      <a class="btn btn-ff-outline w-100 mt-3" href="<?= e(url('tenant/branches.php')) ?>">Manage branches (classic workspace)</a>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="panel mb-3">
+      <h5>Branding & preferences</h5>
+      <form method="post">
+        <?= csrf_field() ?><input type="hidden" name="action" value="branding">
+        <div class="row g-2">
+          <div class="col-6 mb-2"><label class="form-label">Brand colour</label><input type="color" class="form-control form-control-color w-100" name="brand_color" value="<?= e($settings['brand_color'] ?? '#f97316') ?>"></div>
+          <div class="col-6 mb-2"><label class="form-label">Currency</label><input class="form-control" name="currency" value="<?= e($settings['currency'] ?? 'USD') ?>"></div>
+          <div class="col-6 mb-2"><label class="form-label">Timezone</label><input class="form-control" name="timezone" value="<?= e($settings['timezone'] ?? 'UTC') ?>" placeholder="e.g. America/New_York"></div>
+          <div class="col-6 mb-2"><label class="form-label">Default check-in method</label><select class="form-select" name="checkin_method">
+            <option value="qr" <?= ($prefs['checkin_method'] ?? 'qr') === 'qr' ? 'selected' : '' ?>>QR scan</option>
+            <option value="manual" <?= ($prefs['checkin_method'] ?? '') === 'manual' ? 'selected' : '' ?>>Manual</option>
+            <option value="both" <?= ($prefs['checkin_method'] ?? '') === 'both' ? 'selected' : '' ?>>Both</option>
+          </select></div>
+          <div class="col-12 mb-2"><label class="form-label">Gym tagline</label><input class="form-control" name="gym_tagline" value="<?= e($prefs['gym_tagline'] ?? '') ?>" placeholder="Stronger every day"></div>
+        </div>
+        <button class="btn btn-ff">Save branding</button>
+      </form>
+    </div>
+    <div class="panel mb-3">
+      <h5>Notify this gym</h5>
+      <form data-ajax data-endpoint="notifications.php" data-reset>
+        <input type="hidden" name="action" value="send">
+        <div class="mb-2"><label class="form-label">Title</label><input class="form-control" name="title" required placeholder="e.g. Gym closed Sunday for maintenance"></div>
+        <div class="mb-2"><label class="form-label">Message</label><textarea class="form-control" name="body" rows="2"></textarea></div>
+        <button class="btn btn-ff">Send notification</button>
+        <p class="small mt-2 mb-0" style="color:var(--ff-muted)">Appears in the notification bell for staff and in member portals.</p>
+      </form>
+    </div>
+    <div class="panel">
+      <h5>SaaS subscription</h5>
+      <?php if ($sub): ?>
+      <table class="table table-sm mb-3">
+        <tr><th>Plan</th><td><?= e($sub['plan_name']) ?></td></tr>
+        <tr><th>Status</th><td><span class="status-pill st-<?= e($sub['status']) ?>"><?= e($sub['status']) ?></span></td></tr>
+        <tr><th>Billing cycle</th><td><?= e($sub['billing_cycle']) ?></td></tr>
+        <tr><th>Period ends</th><td><?= e($sub['ends_at'] ? substr((string) $sub['ends_at'], 0, 10) : '—') ?></td></tr>
+        <tr><th>Limits</th><td>Members <?= (int) $sub['max_members'] < 0 ? '∞' : (int) $sub['max_members'] ?> · Trainers <?= (int) $sub['max_trainers'] < 0 ? '∞' : (int) $sub['max_trainers'] ?> · Branches <?= (int) $sub['max_branches'] < 0 ? '∞' : (int) $sub['max_branches'] ?></td></tr>
       </table>
-      <p class="small mt-3 mb-0" style="color:var(--ff-muted)">Secrets are never shown here. Database and mail credentials live in your server environment / .env file only.</p>
+      <?php else: ?><p class="small" style="color:var(--ff-muted)">No active subscription found.</p><?php endif; ?>
+      <a class="btn btn-ff-outline w-100" href="<?= e(url('tenant/subscription.php')) ?>">Manage subscription & billing</a>
     </div>
   </div>
 </div>
-<?php require __DIR__ . '/../views/admin/footer.php'; ?>
+<?php require __DIR__ . '/../views/gym-admin/footer.php'; ?>

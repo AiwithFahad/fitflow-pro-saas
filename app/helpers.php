@@ -14,8 +14,8 @@ function e($value): string
 function url(string $path = ''): string
 {
     $script = $_SERVER['SCRIPT_NAME'] ?? '';
-    // Walk up from /public, /admin, /tenant, /member folders to the app root.
-    $root = preg_replace('#/(public|admin|tenant|member)/.*$#', '', $script);
+    // Walk up from the entry-point folders to the app root.
+    $root = preg_replace('#/(public|admin|tenant|member|super-admin|trainer|api)/.*$#', '', $script);
     return rtrim($root, '/') . '/' . ltrim($path, '/');
 }
 
