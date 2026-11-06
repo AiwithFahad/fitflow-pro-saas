@@ -213,3 +213,89 @@ calculator behave as before.
   to the trainer profile (`trainers.user_id`) — seeded for Jake Thompson
   (`trainer@demo.com`); the gym Staff page has the linking form for
   others.
+
+## Runtime verification (live MariaDB, 2026-11-06)
+
+The upgrade above was originally verified without a database. This pass
+re-tested the whole product **live**: MariaDB 10.11 + PHP 8.5 built-in
+server, scratch database imported fresh from `database.sql`, every flow
+driven over HTTP with per-role cookie jars and page-**content**
+assertions (not just status codes), cross-checked against SQL.
+
+**Environment note:** the scratch DB/user and temporary `.env` used for
+testing were removed afterwards; no test data ships in this tree.
+
+### Flows tested — all passing
+- **140+ checks across four suites.** Public pages (17) render clean;
+  logins for Super Admin / Gym Owner / Gym Admin / Trainer / Member land
+  on their own trees (`super-admin/`, `admin/`, `trainer/`, `member/`);
+  role isolation holds (member → other trees redirect to member home,
+  member → admin stats API = 403 JSON, anonymous → login, gym admin →
+  super-admin tree blocked).
+- **Full page sweep with content assertions** (no PHP warnings/fatals in
+  output): 23 admin pages, 8 super-admin, 7 trainer, 8 member, 22 tenant
+  pages.
+- **Dashboard stats API vs SQL**: total/active members, pending
+  payments, trainers all match live queries; charts API returns real
+  series.
+- **Member lifecycle**: create via API generates `FFP-M…` code;
+  Quarterly plan enrolment sets `end_date = start_date + 90 days`;
+  suspend/reactivate via API; CSV export downloads real rows.
+- **Attendance**: manual check-in works; **duplicate check-in refused
+  (422)**; correction writes an `attendance_corrections` audit row and
+  updates the record; QR scan toggles check-out → check-in; trainer
+  attendance toggle works.
+- **Payments (verified-only rule)**: recorded payments start `pending`;
+  API verify moves pending → verified (double-verify refused, 422);
+  fail moves pending → failed; Super Admin verify works.
+- **SaaS flows**: public gym registration creates tenant + trial
+  subscription + default branch/plans; new owner lands on a working
+  (empty-gym) dashboard; Super Admin suspend/reactivate takes effect;
+  forgot-password issues a reset token.
+- **Classes**: booking created; duplicate booking refused; capacity
+  limit enforced. **Finance**: summary API, expense create/delete.
+  Notifications API OK.
+- **Fresh-install proof**: updated `database.sql` re-imported into a
+  brand-new database — 42 tables, new columns present, seeds intact.
+
+### Bugs found by live testing and fixed
+1. `super-admin/plans.php` + `database/database.sql` — the
+   `subscription_plans` table lacked `tagline`, `trial_days` and
+   `features`, which the plans screen reads and writes: list rendering
+   emitted "Undefined array key trial_days" warnings and plan
+   create/update would fail. Columns added to `database.sql`, trial
+   seeded (Free Trial = 14 days), and migration
+   `database/migrations/004_plan_and_maintenance_columns.sql` added for
+   existing installs.
+2. `admin/equipment.php` + `database/database.sql` — the
+   `equipment_maintenance` table lacked the `vendor` column the
+   maintenance log writes and renders ("Undefined array key vendor"
+   warnings; maintenance save would fail). Column added to
+   `database.sql` and to migration 004.
+3. `super-admin/plans.php` — creating a plan **fatal-errored**:
+   `Field 'slug' doesn't have a default value`, because the save
+   handler never supplied the NOT NULL UNIQUE `slug`. Create now
+   derives a unique slug from the plan name (same approach as tenant
+   registration); updates never touch the slug, so the `free-trial`
+   lookup stays stable.
+4. `api/members.php` — creating a member without an explicit `gender`
+   field emitted "Undefined array key gender" (corrupting the JSON
+   response) and then failed the insert with `Column 'gender' cannot
+   be null`: the defaulting ternary read `$in['gender']` unguarded in
+   its true-branch. Fixed to fall back to `'male'` properly.
+
+### Files changed by this verification pass
+- `api/members.php` (bug 4)
+- `super-admin/plans.php` (bug 3)
+- `database/database.sql` (bugs 1–2: new columns + trial seed)
+- `database/migrations/004_plan_and_maintenance_columns.sql` (new; bugs 1–2 for existing installs)
+- `UPGRADE-SUMMARY.md` (this section)
+
+### Final state
+- `php -l` on all **150 PHP files: 0 failures**; `node --check` passes
+  on both JS files.
+- The earlier "Known limitations" note about DB-backed flows being
+  untested no longer applies — they are now runtime-verified above.
+  One by-design note: `GET /` is a 404 under a project-root docroot;
+  the site home is `public/index.php`, matching the README's serving
+  instructions.

@@ -96,9 +96,12 @@ CREATE TABLE subscription_plans (
   id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name           VARCHAR(60) NOT NULL,
   slug           VARCHAR(60) NOT NULL UNIQUE,
+  tagline        VARCHAR(120) NULL,
   description    VARCHAR(255) NULL,
   price_monthly  DECIMAL(10,2) NOT NULL DEFAULT 0,
   price_yearly   DECIMAL(10,2) NOT NULL DEFAULT 0,
+  trial_days     INT NOT NULL DEFAULT 0,
+  features       TEXT NULL,
   max_members    INT NOT NULL DEFAULT 50,
   max_trainers   INT NOT NULL DEFAULT 3,
   max_branches   INT NOT NULL DEFAULT 1,
@@ -568,6 +571,7 @@ CREATE TABLE equipment_maintenance (
   equipment_id INT UNSIGNED NOT NULL,
   type         ENUM('routine','repair','inspection') NOT NULL DEFAULT 'routine',
   description  TEXT NULL,
+  vendor       VARCHAR(120) NULL,
   cost         DECIMAL(10,2) NOT NULL DEFAULT 0,
   performed_at DATE NULL,
   next_due_at  DATE NULL,
@@ -745,12 +749,12 @@ INSERT INTO role_permissions (role_id, permission_id)
 INSERT INTO role_permissions (role_id, permission_id)
   SELECT 8, id FROM permissions WHERE slug IN ('portal.access');
 
-INSERT INTO subscription_plans (id, name, slug, description, price_monthly, price_yearly, max_members, max_trainers, max_branches, max_classes, max_staff, max_storage_mb) VALUES
-(1, 'Free Trial',   'free-trial',   '14-day full-feature trial for new gyms',        0.00,   0.00,     30,   2,  1,   5,   3,   250),
-(2, 'Starter',      'starter',      'For small independent gyms getting started',    29.00,  290.00,   150,   5,  1,  15,   5,  1000),
-(3, 'Professional', 'professional', 'For growing gyms with multiple trainers',       59.00,  590.00,   500,  15,  3,  40,  15,  5000),
-(4, 'Business',     'business',     'For multi-branch gyms and fitness studios',     119.00, 1190.00,  2000,  40,  8, 120,  40, 20000),
-(5, 'Enterprise',   'enterprise',   'Unlimited scale, priority support, API access', 249.00, 2490.00,    -1,  -1, -1,  -1,  -1, 100000);
+INSERT INTO subscription_plans (id, name, slug, description, price_monthly, price_yearly, trial_days, max_members, max_trainers, max_branches, max_classes, max_staff, max_storage_mb) VALUES
+(1, 'Free Trial',   'free-trial',   '14-day full-feature trial for new gyms',        0.00,   0.00,     14, 30,   2,  1,   5,   3,   250),
+(2, 'Starter',      'starter',      'For small independent gyms getting started',    29.00,  290.00,   0,  150,   5,  1,  15,   5,  1000),
+(3, 'Professional', 'professional', 'For growing gyms with multiple trainers',       59.00,  590.00,   0,  500,  15,  3,  40,  15,  5000),
+(4, 'Business',     'business',     'For multi-branch gyms and fitness studios',     119.00, 1190.00,  0,  2000,  40,  8, 120,  40, 20000),
+(5, 'Enterprise',   'enterprise',   'Unlimited scale, priority support, API access', 249.00, 2490.00,  0,    -1,  -1, -1,  -1,  -1, 100000);
 
 INSERT INTO coupons (code, type, value, max_uses, used_count, expires_at, is_active) VALUES
 ('WELCOME10', 'percent', 10.00, NULL, 0, NULL, 1),

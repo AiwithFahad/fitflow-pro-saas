@@ -30,6 +30,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SubscriptionPlan::updateById((int) $_POST['id'], $data);
             flash('success', 'Plan updated.');
         } else {
+            // slug is NOT NULL + UNIQUE but the form has no field for it:
+            // derive a unique one from the plan name (same approach as
+            // gym registration uses for tenant slugs).
+            $base = trim(strtolower((string) preg_replace('/[^a-z0-9]+/', '-', $data['name'])), '-');
+            $slug = $base !== '' ? $base : 'plan';
+            $suffix = 2;
+            while ((int) (Database::scalar('SELECT COUNT(*) FROM subscription_plans WHERE slug = ?', [$slug]) ?? 0) > 0) {
+                $slug = $base . '-' . $suffix++;
+            }
+            $data['slug'] = $slug;
             SubscriptionPlan::create($data);
             flash('success', 'Plan created.');
         }

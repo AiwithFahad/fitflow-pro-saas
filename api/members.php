@@ -153,7 +153,7 @@ api_handle(function (): void {
             'address' => trim((string) ($in['address'] ?? '')) ?: null,
             'emergency_contact_name' => trim((string) ($in['emergency_contact_name'] ?? '')) ?: null,
             'emergency_contact_phone' => trim((string) ($in['emergency_contact_phone'] ?? '')) ?: null,
-            'gender' => in_array($in['gender'] ?? 'male', ['male', 'female', 'other'], true) ? $in['gender'] : 'male',
+            'gender' => in_array($in['gender'] ?? 'male', ['male', 'female', 'other'], true) ? ($in['gender'] ?? 'male') : 'male',
             'date_of_birth' => ($in['date_of_birth'] ?? '') ?: null,
             'height_cm' => $height,
             'weight_kg' => $weight,
